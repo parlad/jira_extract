@@ -7,8 +7,10 @@ def main():
     parser.add_argument('-j','--jql', nargs='?', default='ORDER BY key', metavar='JQL_query', help='JQL query - default query is "ORDER BY key"')
     parser.add_argument('-u', required=True, metavar='username', help='Username')
     parser.add_argument('-p', required=True, metavar='password', help='Password')
-    parser.add_argument('-n', nargs='?', default=1000, type=int, metavar='Number_of_issues', help='Number of issues per batch. Default of 1000 in line with Jira\'s default. For more details, check https://confluence.atlassian.com/jirakb/filter-export-only-contains-1000-issues-in-jira-server-191500982.html')
+    parser.add_argument('-n', nargs='?', default=1000, type=int, metavar='Number_of_issues', help='Number of issues per batch. Default of 1000 in line with Jira\'s default. For more details, check https://confluence.atlassian.com/jirakb/filter-export-only-contains-1001-issues-in-jira-server-191500982.html')
     parser.add_argument('-U','--url', required=True, metavar='Base_URL', help='Jira\'s base URL. For example, https://jira.mycompany.com')
+    parser.add_argument('-c','--cert', metavar='Certificate_File', help='Path to SSL certificate file')
+    parser.add_argument('-ca','--cacert', metavar='CA_Certificate_Bundle', help='Path to CA certificate bundle file')
 
     args = parser.parse_args()
 
@@ -17,10 +19,18 @@ def main():
     password = args.p
     step = args.n
     baseurl = args.url
+    cert_file = args.cert
+    ca_cert_bundle = args.cacert
 
     options = {
-        'server': baseurl
+        'server': baseurl,
+        'options': {
+            'cert': cert_file
+        }
     }
+
+    if ca_cert_bundle:
+        options['options']['verify'] = ca_cert_bundle
 
     try:
         jira = JIRA(options, basic_auth=(username, password))
