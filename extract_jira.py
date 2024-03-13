@@ -22,36 +22,33 @@ def main():
     if password == '':
         password = getpass.getpass()
 
-    start = 0
     output_filename = 'output.csv'
-    total_issues_exported = 0
 
     url = f"{baseurl}/sr/jira.issueviews:searchrequest-csv-all-fields/temp/SearchRequest.csv?jqlQuery={jql}"
+    start = 0
+    total_issues_exported = 0
 
-    while True:
-        print(f"{total_issues_exported} issues exported")
-        theurl = f"{url}&tempMax={step}&pager/start={start}"
-        resp = requests.get(theurl, auth=(username, password), verify=False)
+    with open(output_filename, 'w', newline='', encoding='utf-8') as output_file:
+        csv_writer = csv.writer(output_file)
 
-        lines = resp.text.split('\n')
-        total_issues_exported += len(lines) - 1  # Exclude the header line
+        while True:
+            theurl = f"{url}&tempMax={step}&pager/start={start}"
+            resp = requests.get(theurl, auth=(username, password), verify=False)
 
-        if start == 0:
-            with open(output_filename, 'w', newline='') as output_file:
-                csv_writer = csv.writer(output_file)
+            lines = resp.text.split('\n')
+            if start == 0:
                 csv_writer.writerows([lines[0].split(',')])  # Write header only for the first batch
 
-        with open(output_filename, 'a', newline='') as output_file:
-            csv_writer = csv.writer(output_file)
-            for line in lines[1:]:  # Skip the header for subsequent batches
-                csv_writer.writerows([line.split(',')])
+            for line in lines[1:]:
+                csv_writer.writerow(line.split(','))
+                total_issues_exported += 1  # Increment the total count for each issue exported
 
-        start += step
+            start += step
 
-        if len(lines) <= 1:  # If there are no more issues, break the loop
-            print(f"All issues ({total_issues_exported}) exported")
-            break
+            if len(lines) <= 1:  # If there are no more issues, break the loop
+                break
 
+    print(f"All issues ({total_issues_exported}) exported")
     print("Data exported to:", output_filename)
 
 if __name__ == "__main__":
