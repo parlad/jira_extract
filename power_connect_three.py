@@ -1,16 +1,15 @@
-from jira import JIRA
+import requests
 import csv
 import argparse
+import getpass
 
 def main():
     parser = argparse.ArgumentParser(description='Calls a JQL query and exports it to a CSV file.\nWe suggest that the JQL queries end with "ORDER BY key"')
     parser.add_argument('-j','--jql', nargs='?', default='ORDER BY key', metavar='JQL_query', help='JQL query - default query is "ORDER BY key"')
     parser.add_argument('-u', required=True, metavar='username', help='Username')
-    parser.add_argument('-p', required=True, metavar='password', help='Password')
-    parser.add_argument('-n', nargs='?', default=1000, type=int, metavar='Number_of_issues', help='Number of issues per batch. Default of 1000 in line with Jira\'s default. For more details, check https://confluence.atlassian.com/jirakb/filter-export-only-contains-1001-issues-in-jira-server-191500982.html')
+    parser.add_argument('-p', nargs='?', default='', metavar='password', help='Password. If parameter is not passed, the password will be prompted')
+    parser.add_argument('-n', nargs='?', default=1000, type=int, metavar='Number_of_issues', help='Number of issues per batch. Default of 1000 in line with Jira\'s default. For more details, check https://confluence.atlassian.com/jirakb/filter-export-only-contains-1000-issues-in-jira-server-191500982.html')
     parser.add_argument('-U','--url', required=True, metavar='Base_URL', help='Jira\'s base URL. For example, https://jira.mycompany.com')
-    parser.add_argument('-c','--cert', metavar='Certificate_File', help='Path to SSL certificate file')
-    parser.add_argument('-ca','--cacert', metavar='CA_Certificate_Bundle', help='Path to CA certificate bundle file')
 
     args = parser.parse_args()
 
@@ -19,49 +18,42 @@ def main():
     password = args.p
     step = args.n
     baseurl = args.url
-    cert_file = args.cert
-    ca_cert_bundle = args.cacert
 
-    options = {
-        'server': baseurl,
-        'options': {
-            'cert': cert_file
-        }
-    }
-
-    if ca_cert_bundle:
-        options['options']['verify'] = ca_cert_bundle
-
-    try:
-        jira = JIRA(options, basic_auth=(username, password))
-    except Exception as e:
-        print("Failed to connect to Jira:", e)
-        return
-
-    issues = jira.search_issues(jql, maxResults=step)
-
-    if not issues:
-        print("No issues found for the provided JQL query.")
-        return
+    if password == '':
+        password = getpass.getpass()
 
     output_filename = 'output.csv'
 
-    with open(output_filename, 'w', newline='', encoding='utf-8') as output_file:
-        csv_writer = csv.writer(output_file)
+    url = f"{baseurl}/sr/jira.issueviews:searchrequest-csv-all-fields/temp/SearchRequest.csv?jqlQuery={jql}"
+    start = 0
+    total_issues_exported = 0
 
-        # Write header
-        header = ['Issue Key', 'Summary', 'Assignee', 'Reporter', 'Status']
-        csv_writer.writerow(header)
+    try:
+        with open(output_filename, 'w', newline='', encoding='utf-8') as output_file:
+            csv_writer = csv.writer(output_file)
 
-        for issue in issues:
-            assignee = getattr(issue.fields.assignee, 'displayName', 'Unassigned')
-            reporter = getattr(issue.fields.reporter, 'displayName', 'Unknown')
-            status = issue.fields.status.name
+            while True:
+                theurl = f"{url}&tempMax={step}&pager/start={start}"
+                resp = requests.get(theurl, auth=(username, password), verify=False)
+                resp.raise_for_status()  # Raise an exception for non-200 responses
 
-            row = [issue.key, issue.fields.summary, assignee, reporter, status]
-            csv_writer.writerow(row)
+                lines = resp.text.split('\n')
+                if start == 0:
+                    csv_writer.writerows([lines[0].split(',')])  # Write header only for the first batch
 
-    print("Data exported to:", output_filename)
+                for line in lines[1:]:
+                    csv_writer.writerow(line.split(','))
+                    total_issues_exported += 1  # Increment the total count for each issue exported
+
+                start += step
+
+                if len(lines) <= 1:  # If there are no more issues, break the loop
+                    break
+
+        print(f"All issues ({total_issues_exported}) exported")
+        print("Data exported to:", output_filename)
+    except requests.exceptions.RequestException as e:
+        print("Error:", e)
 
 if __name__ == "__main__":
     main()
