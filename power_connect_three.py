@@ -47,7 +47,7 @@ def main():
 
                 start += step
 
-                if len(lines) <= 1:  # If there are no more issues, break the loop
+                if len(lines) <= 1 or total_issues_exported % step != 0:  # If there are no more issues or the last batch is incomplete, break the loop
                     break
 
         print(f"All issues ({total_issues_exported}) exported")
