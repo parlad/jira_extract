@@ -1,0 +1,51 @@
+import requests
+import csv
+import os
+import argparse
+import getpass
+
+parser = argparse.ArgumentParser(description='Calls a JQL query and export it to a CSV file.\nWe suggest that the JQL queries end with "ORDER BY key"')
+parser.add_argument('-j', '--jql', nargs='?', default='ORDER BY key', metavar='JQL_query', help='JQL query - default query is "ORDER BY key"')
+parser.add_argument('-u', required=True, metavar='username', help='Username')
+parser.add_argument('-p', nargs='?', default='', metavar='password', help='Password. If parameter is not passed, the password will be prompted')
+parser.add_argument('-n', type=int, nargs='?', default=1000, metavar='Number_of_issues', help='Number of issues per CSV batch. Default of 1000 in line with Jira''s default. For more details, check https://confluence.atlassian.com/jirakb/filter-export-only-contains-1000-issues-in-jira-server-191500982.html')
+parser.add_argument('-U', '--url', required=True, metavar='Base_URL', help='Jira''s base URL. For example, https://jira.mycompany.com')
+
+args = parser.parse_args()
+
+jql = args.jql
+username = args.u
+password = args.p
+step = args.n
+baseurl = args.url
+
+if password == '':
+    password = getpass.getpass()
+
+start = 0
+
+url = f'{baseurl}/sr/jira.issueviews:searchrequest-csv-all-fields/temp/SearchRequest.csv?jqlQuery={jql}'
+
+# Open the output file once before the loop
+with open('output.csv', 'w', newline='') as output_file:
+    while True:
+        print(f'{start} issues exported')
+        theurl = f'{url}&tempMax={step}&pager/start={start}'
+        resp = requests.get(theurl, auth=(username, password), verify=False)
+
+        # Check if the response is successful
+        if resp.status_code != 200:
+            print('Error occurred while fetching data from Jira. Please check your credentials and try again.')
+            break
+
+        # Write response text directly to the file
+        output_file.write(resp.text)
+
+        # Check if we've reached the end of issues
+        if len(resp.text.strip()) == 0:
+            print(f'All issues exported')
+            break
+
+        start += step
+
+print('Export completed.')
